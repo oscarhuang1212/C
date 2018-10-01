@@ -1,9 +1,12 @@
 // File:    CSVtoBin_Sparse.c
 // Name:    Oscar Huang
-// Desc:    Convert csv file to binary file. The output file is shuffled by transform.
-// Input:   Csv file
-// Output:  Transformed binary file. Each node was recorded as (row, col, value)
-// Keypoints: Binary file creating
+// Desc:    Convert sparse csv file to binary file. 
+//          Each node was recorded as (row, col, value) in the binary file
+// Input:   CSV file
+// Output:  Binary file of transposed matrix. The transposition is to mimic nodes random distributed in the binary file.
+// Usage:   Compiled_program [input csv file location] [output bin file location]  
+// Keypoints: Sparse binary file creating
+
 
 
 #include "stdio.h"
@@ -13,8 +16,12 @@
 
 int main(int argc, char *argv[]){
 
-    FILE* in_file =fopen(csv_file_name, "r");
-    FILE* out_file =fopen(matrix_bin_file_name, "wb");
+
+    const char* input_file_name = argv[1];
+    const char* output_file_name = argv[2];
+
+    FILE* in_file =fopen(input_file_name, "r");
+    FILE* out_file =fopen(output_file_name, "wb");
 
     char* reading_buffer = malloc(ncol*(sizeof(int)+sizeof(char)));
     char* pt;
@@ -30,7 +37,7 @@ int main(int argc, char *argv[]){
             if(atoi(pt)!=0)
                 {
                     buffer = atoi(pt);
-                        fwrite(&col,sizeof(int),1,out_file);//Using transform to shuffle
+                        fwrite(&col,sizeof(int),1,out_file);//Using transpose to shuffle
                         fwrite(&row,sizeof(int),1,out_file);
                         fwrite(&buffer,sizeof(int),1,out_file);
                 }

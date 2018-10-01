@@ -1,15 +1,19 @@
 // File:    Matrix_Vector_ReadbyRow.c
 // Name:    Oscar Huang
 // Desc:    Calculate the matrix vector multiplication. 
-//          Each processor load assigned rows from the matrix file. 
-//              (Matrix data size in each processor: local_nrow * ncol)
-//          For practicing purpose, the data was communicated by MPI_Alltoallv, and each processor holds data within assigned column. 
-//              (Matrix data size in each processor: nrow * local_ncol)
+//          Each processor (input) load assigned rows from the matrix file. 
+//              (Data size in each processor: local_nrow * ncol)
+//
+//          To practice data communication between processors, the data was re-distributed by MPI_Alltoall.
+//          Each processor holds assigned columns after the re-distribution.          
+//              (Data size in each processor: nrow * local_ncol)
+//
 //          Multiply the data with the imported vector (partial).
 //              Local imported vector size: locl_ncol
 //              Local result size: nrow
 //          Use MPI_reduce to sum all the local result.
 // Input:   Binary file of dense matrix and vector.
+// Usage:   Compiled_program [binary matrix file location] [binary vector file location]  
 // Keypoints: Binary file handling / MPI_Alltoallv / MPI_Reduce
 
 #include "stdio.h"
@@ -22,8 +26,9 @@
 void unpacked(int* input, int* local_nrow, int* local_ncol, int p, int rank);
 int main(int argc, char *argv[]){
 
-    FILE* matrix_file =fopen(matrix_file_name_bin, "r");
-    FILE* vector_file =fopen(vector_file_name_bin, "r");
+
+    FILE* matrix_file = fopen(argv[1],"r");
+    FILE* vector_file = fopen(argv[2], "r");
 
     int rank, p;
     int* result = malloc(nrow*sizeof(int));

@@ -1,3 +1,11 @@
+// File:    CSVtoBin.c
+// Name:    Oscar Huang
+// Desc:    Convert csv file to binary file.
+// Input:   CSV file 
+// Output:  Binary file 
+// Usage:   Compiled_program [input csv file location] [output bin file location]  
+// Keypoints: Binary file creating
+
 #include "stdio.h"
 #include "stdlib.h"
 #include <string.h>
@@ -5,35 +13,26 @@
 
 
 int main(int argc, char *argv[]){
-    const char* input_file_name = matrix_file_name_csv; 
-    const char* output_file_name = vector_file_name_bin; 
 
+    const char* input_file_name = argv[1];
+    const char* output_file_name = argv[2];
+    
     FILE* in_file =fopen(input_file_name, "r");
     FILE* out_file =fopen(output_file_name, "wb");
 
     char reading_buffer[128];
     int int_buffer[128];
     char* pt;
-    int i=0;
 
+    int value;
 
-    while(1)
-    {   
-        if(fgets(reading_buffer,sizeof(reading_buffer),in_file)!=NULL)
-        {
-            pt = strtok(reading_buffer,",");
-
-            i=0;
-            while(pt!=NULL)
-            {
-                int_buffer[i] = atoi(pt);
-                pt=strtok(NULL,",");
-                i++;
-            }
-            fwrite(int_buffer,sizeof(int),i,out_file);
+    for(int i = 0; i < nrow; i++)
+    {
+        for(int j = 0; j < ncol;j++){
+            fscanf(in_file, "%d,", &value);
+            fwrite(&value,sizeof(int),1,out_file);
         }
-        else
-            break;
+
     }
 
     fclose(in_file);

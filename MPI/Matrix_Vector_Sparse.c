@@ -10,6 +10,7 @@
 //          Using MPI_Gatherv to collect the local_results from each processor to root processor (processor 0)
 // Input:   Binary file of sparse matrix and dense vector.
 //          Nodes' format in sparse matrix: (row, column, value)
+// Usage:   Compiled_program [binary matrix file location] [binary vector file location]  
 // Keypoints:   Binary sparse matrix / MPI_Type_create_struct/ MPI_Allreduce / MPI_AlltoAll
 //              MPI_Alltoallv / MPI_Gatherv
 
@@ -32,9 +33,9 @@ struct node
 
 int main(int argc, char *argv[]){
 
-    FILE* matrix_file = fopen(matrix_bin_file_name,"r");
-    FILE* vector_file =fopen(vector_bin_file_name, "r");
-
+    FILE* matrix_file = fopen(argv[1],"r");
+    FILE* vector_file = fopen(argv[2], "r");
+    
     if (matrix_file==NULL || vector_file==NULL)
     {
         printf("Error reading file\n");
@@ -51,28 +52,46 @@ int main(int argc, char *argv[]){
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    //create MPI_Type: MPI_NODE for sending nodes
-    MPI_Aint disp[]={0};       
-    int block[] = {3};
-    MPI_Datatype MPI_NODE;
+    //create MPI_Type: MPI_myNode for sending nodes
+    MPI_Datatype MPI_myNode;//myNode
     MPI_Datatype T[1] = {MPI_INT};
-    MPI_Type_create_struct(1,block,disp,T, &MPI_NODE);    
-    MPI_Type_commit(&MPI_NODE);
+    int block[] = {3};
+    MPI_Aint disp[]={0};       
+    MPI_Type_create_struct(1,block,disp,T, &MPI_myNode);    
+    MPI_Type_commit(&MPI_myNode); 
+     
+    /*
+    Practicing create type with different type:
+    
+    To create a type with {int, double[5], char[2]}:
+    
+    MPI_Datatype MPI_myNode;
+    MPI_Datatype T[3] = {MPI_INT, MPI_DOUBLE, MPI_CHAR};
+    int block[3] = {1,5,2};
+    
+    MPI_Aint disp[3];
+    disp[0] = 0;
+    disp[1] = disp[0] + sizeof(int)*block[0];
+    disp[2] = disp[1] + sizeof(double)*block[1];
+    
+    MPI_Type_create_struct(3,block,disp,T, &MPI_myNode);    
+    MPI_Type_commit(&MPI_myNode); 
+    */
 
     //calculate the number of points to read for each processor
-    int section_size;   
-    section_size= floor((rank+1)*npoints/p)-floor(rank*npoints/p); 
+    int local_section_size;   
+    local_section_size= floor((rank+1)*npoints/p)-floor(rank*npoints/p); 
 
     //read information from input file
-    struct node* input = calloc(section_size,(sizeof(struct node)));
+    struct node* local_input = calloc(local_section_size,(sizeof(struct node)));
     fseek(matrix_file,(int)floor(rank*npoints/p)*sizeof(struct node),SEEK_SET);
-    fread(input, sizeof(struct node),section_size,matrix_file);
+    fread(local_input, sizeof(struct node),local_section_size,matrix_file);
     fclose(matrix_file);
     
 
     //calculate number of points in each row
-    for(int i=0; i<section_size; i++) 
-        row_npoints[input[i].row]++;
+    for(int i=0; i<local_section_size; i++) 
+        row_npoints[local_input[i].row]++;
 
     //calculate the accumulated number of points in each row
     row_npoints_acc[0]=row_npoints[0];
@@ -80,31 +99,31 @@ int main(int argc, char *argv[]){
     for(int i=1; i<nrow; i++)
         row_npoints_acc[i]=row_npoints_acc[i-1]+row_npoints[i]; 
 
-
     MPI_Allreduce(MPI_IN_PLACE,row_npoints_acc,nrow,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
 
 
     //calculate the number of rows each processor should process. For each processor, the number of points processed will be similar.
     int* local_nrow_acc = calloc(p,sizeof(int)); 
-    
-    for(int i=0; i<p; i++)
-    {
-        for(int j=0; j<nrow; j++)
-            if(row_npoints_acc[j]<=(i+1)*(float)npoints/p)
-                local_nrow_acc[i]= j;
-    }    
-    
+
+    int c = 0;
+    for(int j=0; j<nrow; j++)
+        if(row_npoints_acc[j]<=(float)(c+1)*npoints/p)
+            local_nrow_acc[c]= j;
+        else
+            c++;
+        
+
     //calculate the sending_count for MPI_Alltoallv
     int* input_sending_count = calloc(p,sizeof(int)); 
 
-    for(int i=0; i<section_size; i++)
+    for(int i=0; i<local_section_size; i++)
     {
-        if(input[i].row<=local_nrow_acc[0])
+        if(local_input[i].row<=local_nrow_acc[0])
                 input_sending_count[0]++;
     
         else
             for(int j=1; j<p; j++)
-                    if(input[i].row<=local_nrow_acc[j] && input[i].row>local_nrow_acc[j-1])
+                    if(local_input[i].row<=local_nrow_acc[j] && local_input[i].row>local_nrow_acc[j-1])
                             input_sending_count[j]++;
     }
 
@@ -115,23 +134,23 @@ int main(int argc, char *argv[]){
         input_sending_count_acc[i]=input_sending_count_acc[i-1]+input_sending_count[i-1];
 
 
-    struct node* input_sorted = calloc(section_size,sizeof(struct node));
+    struct node* input_sorted = calloc(local_section_size,sizeof(struct node));
     int* sorting_count = calloc(p,sizeof(int));
 
-    //sort the input nodes depends on the row
-    for(int i=0; i<section_size; i++) 
+    //sort the local_input nodes depends on the row
+    for(int i=0; i<local_section_size; i++) 
     {
-        if(input[i].row<=local_nrow_acc[0])
+        if(local_input[i].row<=local_nrow_acc[0])
             {
-                input_sorted[sorting_count[0]]=input[i];
+                input_sorted[sorting_count[0]]=local_input[i];
                 sorting_count[0]++;
             }
         else
             {
                 for(int j=1; j<p; j++)
-                    if(input[i].row<=local_nrow_acc[j] && input[i].row>local_nrow_acc[j-1])
+                    if(local_input[i].row<=local_nrow_acc[j] && local_input[i].row>local_nrow_acc[j-1])
                         {
-                            input_sorted[input_sending_count_acc[j]+sorting_count[j]]=input[i];
+                            input_sorted[input_sending_count_acc[j]+sorting_count[j]]=local_input[i];
                             sorting_count[j]++;
                         }
             }
@@ -140,9 +159,10 @@ int main(int argc, char *argv[]){
     free(sorting_count);
 
   
-    //Calculate the recv buffer size
+    //Calculate the recv buffer size // Could be optimized by avoiding this
     int* recv_size = malloc(p*sizeof(int)); 
     MPI_Allreduce(input_sending_count,recv_size,p,MPI_INT,MPI_SUM,MPI_COMM_WORLD); 
+
 
     //Calculate the recv count for the MPI_Alltoallv
     int* recv_count = malloc(p*sizeof(int)); 
@@ -157,7 +177,7 @@ int main(int argc, char *argv[]){
 
 
     //sending and receiving nodes between processor
-    MPI_Alltoallv(input_sorted,input_sending_count,input_sending_count_acc,MPI_NODE,recv,recv_count,recv_count_acc,MPI_NODE,MPI_COMM_WORLD);
+    MPI_Alltoallv(input_sorted,input_sending_count,input_sending_count_acc,MPI_myNode,recv,recv_count,recv_count_acc,MPI_myNode,MPI_COMM_WORLD);
 
 
     //import vector file to all processors
@@ -199,7 +219,7 @@ int main(int argc, char *argv[]){
 
     MPI_Finalize();
 
-    free(input);
+    free(local_input);
     free(row_npoints);
     free(row_npoints_acc);
     free(local_nrow_acc);
