@@ -1,4 +1,4 @@
-// File:    binary_tree.c
+// File:    binarySearchTree.c
 // Name:    Oscar Huang
 // Desc:    Creating binary tree strcture and the binary tree operation functions.
 //
