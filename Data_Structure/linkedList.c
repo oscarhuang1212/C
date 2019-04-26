@@ -1,4 +1,4 @@
-// File:    linkedlist.c
+// File:    linkedList.c
 // Name:    Oscar Huang
 // Desc:    Creating linkedlist strcture and the linkedlist operation functions.
 //
